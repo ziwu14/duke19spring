@@ -1,0 +1,9 @@
+{% extends "admin/base.html" %}
+<!--modifying a block: title, branding-->
+{% block title %}{{ title }} | McFlurry{% endblock %}
+
+{% block branding %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">McFlurry</a></h1>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
