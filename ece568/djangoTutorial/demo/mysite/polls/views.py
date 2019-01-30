@@ -63,6 +63,7 @@ from django.views import generic
 
 from .models import Choice, Question
 
+from django.utils import timezone
 # import generic
 # define class which extends generic's template
 # we could assign some attributes e.g. template, dictionary,model
@@ -76,14 +77,20 @@ class IndexView(generic.ListView):
     context_object_name = 'latest_question_list' # 纯粹是为了给dictionary换个名字
 
     def get_queryset(self):
-        """Return the last five published questions."""
-        return Question.objects.order_by('-pub_date')[:5]
-
+        """
+        Return the last five published questions (not including those set to be
+        published in the future).
+        """
+        return Question.objects.filter(pub_date__lte=timezone.now()).order_by('-pub_date')[:5]
 # DetailView capture "pk" value from URL, that is the reason why we use "pk" instead of "question_id" in urls.py
 class DetailView(generic.DetailView):
     model = Question
     template_name = 'polls/detail.html'
-
+    def get_queryset(self):
+        """
+        Excludes any questions that aren't published yet.
+        """
+        return Question.objects.filter(pub_date__lte=timezone.now())
 
 class ResultsView(generic.DetailView):
     model = Question
