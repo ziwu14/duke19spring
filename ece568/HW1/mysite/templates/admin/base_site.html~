@@ -1,0 +1,9 @@
+{% extends "admin/base.html" %}
+<!--modifying a block: title, branding-->
+{% block title %}{{ title }} | {{ site_title|default:_('McFlurry') }}{% endblock %}
+
+{% block branding %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('McFlurry') }}</a></h1>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
