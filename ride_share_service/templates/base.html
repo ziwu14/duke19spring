@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>Ride Share</title>
+  </head>
+  <body>
+    <nav class="navbar mynav" role='navigation' id='navbar'>
+      <div class="container">
+        <a class="navbar-brand mynav" href="{% url 'home' %}">Ride Share</a>
+        <ul class='nav navbar-nav navbar-right'>
+          {% if user.is_authenticated %}
+            <li><a href="{% url 'driverRegister:registerdriver' %}">Register to become a driver</a></li>
+            <li><a href="#">Register to become a rider</a></li>
+            <li><a href="{% url 'accounts:logout' %}">Log out</a></li>
+          {% else %}
+            <li><a href="#"></a><li>
+            <li><a href="{% url 'accounts:login' %}">Log In</a></li>
+            <li><a href="{% url 'accounts:signup' %}">Sign Up</a></li>
+          {% endif %}
+        </ul>
+      </div>
+    </nav>
+
+    <div class="container mycontent">
+
+    </div>
+    {% block content %}
+
+    {% endblock %}
+  </body>
+</html>
