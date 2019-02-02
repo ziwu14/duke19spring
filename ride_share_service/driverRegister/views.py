@@ -86,6 +86,13 @@ def edit_profile(request):
             return HttpResponseRedirect(reverse('driverRegister:view_profile'))
         
     else:
+        default_data = {'type': user.driver.type, 'license_plate_num': user.driver.license_plate_num,
+                        'max_num_passengers': user.driver.max_num_passengers, }
+        form = EditProfileForm(instance=request.user)
+        driver_form = EditDriverProfileForm(default_data,instance=request.user)
+        args = {'form': form, 'driver_form': driver_form}
+        return render(request, 'edit_profile.html',args)
+    
         form = EditProfileForm(instance=request.user)
         driver_form = EditDriverProfileForm(instance=request.user)
         args = {'form': form, 'driver_form': driver_form}
