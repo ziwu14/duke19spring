@@ -10,7 +10,7 @@ class DriverRegisterForm(forms.ModelForm):
     class Meta:
         model = Driver
         fields = ['type','license_plate_num','max_num_passengers']
-
+        
     def save(self, commit=True):
         user = super(DriverRegisterForm,self).save(commit=False)
         #user.first_name = self.cleaned_data['first_name']
@@ -23,14 +23,13 @@ class DriverRegisterForm(forms.ModelForm):
             user.save()
 
         return user
-
-
-class EditProfileForm(UserChangeForm):
+    
+class EditProfileForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ['email']
 
-class EditDriverProfileForm(UserChangeForm):
+class EditDriverProfileForm(forms.ModelForm):
     class Meta:
         model = Driver
         fields = ['type','license_plate_num','max_num_passengers']

@@ -1,4 +1,4 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render
 #from django.urls import reverse_lazy
 #from django.views.generic import TemplateView
 from django.http import HttpResponse, HttpResponseRedirect
@@ -7,8 +7,6 @@ from django.forms import ModelForm
 from driverRegister.forms import DriverRegisterForm, EditProfileForm, EditDriverProfileForm
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserChangeForm
-from django.urls import reverse
-from .models import Driver
 
 # Create your views here.
 def reg_driver(request):
@@ -43,48 +41,21 @@ def reg_driver(request):
 def view_profile(request):
     args = {'user':request.user}
     return render(request, 'driver_detail.html',args)
-'''
-def edit_profile(request,pk):
-    user = get_object_or_404(User,pk=pk)
-    user_profile = get_object_or_404(Driver,user=user)
-    if request.method == 'POST':
-        form = EditProfileForm(request.POST)
-        # driver_form = EditDriverProfileForm(request.POST, instance=request.user)
-        #return HttpResponse('Oops!')
-        
-        if form.is_valid(): # and driver_form.is_valid():
-            user.email = form.cleaned_data['email']
-                                                        
-            user_profile.type = form.cleaned_data['type']
-            user_profile.license_plate_num = form.cleaned_data['license_plate_num']
-            user_profile.max_num_passengers = form.cleaned_data['max_num_passengers']
-            user.save()
-            user_profile.save()
-            return HttpResponseRedirect(reverse('driverRegister:view_profile'))
-        
-    else:
-        form = EditProfileForm(instance=request.user)
-        driver_form = EditDriverProfileForm(instance=request.user)
-        args = {'form': form, 'driver_form': driver_form}
-        return render(request, 'edit_profile.html',args)
-'''
+
 def edit_profile(request):
-    user=request.user
-    if request.method == 'POST':
-        form = EditProfileForm(request.POST)
+    if request.method == 'post':
+        form = EditProfileForm(request.POST, instance=request.user)
         driver_form = EditDriverProfileForm(request.POST, instance=request.user)
-        #return HttpResponse('Oops!')
-        
+
         if form.is_valid() and driver_form.is_valid():
-            user.email = form.cleaned_data['email']                                    
-            user.driver.type = driver_form.cleaned_data['type']
-            user.driver.license_plate_num = driver_form.cleaned_data['license_plate_num']
-            user.driver.max_num_passengers = driver_form.cleaned_data['max_num_passengers']
-            
-            user.save()
-            user.driver.save()
-            return HttpResponseRedirect(reverse('driverRegister:view_profile'))
-        
+            form.save()
+
+            #driver_instance = driver_form.save(commit=False)
+            #driver_instance.user = request.user
+            driver_instance.save()
+
+            #return redirect('/driverRegister/profile')
+            return HttpResponseRedirect('/driverRegister/profile')
     else:
         form = EditProfileForm(instance=request.user)
         driver_form = EditDriverProfileForm(instance=request.user)
