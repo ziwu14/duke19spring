@@ -10,9 +10,6 @@
 typedef struct _meta_t * meta_t;
 struct _meta_t{
   size_t dsize;//size of data block
-  int free;//1 is free; 0 is not free
-  int padding;//2 int  = 8 bytes, in order to make meta multiple of 8(no extra use)
-  void *ptr;//point to data
   meta_t fprev;
   meta_t fnext;
 };
