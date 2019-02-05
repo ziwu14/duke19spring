@@ -4,26 +4,25 @@
 #include <unistd.h>
 #include "my_malloc.h"
 
-#define MALLOC(sz) bf_malloc(sz)
-#define FREE(p)    bf_free(p)
+#define MALLOC bf_malloc
+#define FREE bf_free
 /*
 #ifdef LOCK_VERSION
-#define MALLOC(sz) ts_malloc_lock(sz)
-#define FREE(p)    ts_free_lock(p)
+#define MALLOC(sz) bf_malloc(sz)
+#define FREE(p)    bf_free(p)
 #endif
 #ifdef NOLOCK_VERSION
 #define MALLOC(sz) ts_malloc_nolock(sz)
 #define FREE(p)    ts_free_nolock(p)
 #endif
-
+*/
 #define NUM_THREADS  4
 #define NUM_ITEMS    10000
-*/
+
 pthread_t threads[NUM_THREADS];
 int       thread_id[NUM_THREADS];
 
 pthread_barrier_t barrier;
-pthread_mutex_t   my_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct malloc_list {
   size_t bytes;
@@ -37,10 +36,7 @@ malloc_list_t malloc_items[NUM_THREADS * NUM_ITEMS];
 
 void do_allocate(int thread_id) {
   int i, index;
-  int do_free;
-  //Rotate the counter so that each thread will free addresses
-  //that were malloc'ed by another thread.
-  int counter = ((thread_id+1)%NUM_THREADS) * NUM_ITEMS;
+  int counter = 0;
   int thread_start_index = thread_id * NUM_ITEMS;
 
   //Let all threads get up and running
@@ -52,20 +48,10 @@ void do_allocate(int thread_id) {
     malloc_items[index].address = (int *)MALLOC(malloc_items[index].bytes);
     malloc_items[index].free = 0;
 
-    if ((i % 10) == 0) { //Occasionally free some items
-      pthread_mutex_lock(&my_mutex);
-      if (malloc_items[counter].free == 0) {
-	malloc_items[counter].free = 1;
-	do_free = 1;
-      } else {
-	do_free = 0;
-      } //else
-      pthread_mutex_unlock(&my_mutex);
-      if (do_free == 1) {
-	FREE(malloc_items[counter].address);
-	counter++;
-      }
-    } //if
+    /* if ((i % 100) == 0) { //Occasionally free some items */
+    /*   FREE(malloc_items[counter].address); */
+    /*   malloc_items[counter].free = 1; */
+    /* } //if */
   } //for i
 
   pthread_barrier_wait(&barrier);
@@ -91,15 +77,14 @@ int main(int argc, char *argv[])
   for (i=0; i < NUM_THREADS*NUM_ITEMS; i++) {
     unsigned num_chunks = (rand() % (max_chunks - min_chunks + 1)) + min_chunks;
     malloc_items[i].bytes = num_chunks * chunk_size;
-    malloc_items[i].free = 1;
   } //for i
 
   pthread_barrier_init(&barrier, NULL, NUM_THREADS);
-
   for (i=0; i < NUM_THREADS; i++) {
     thread_id[i] = i;
     pthread_create(&threads[i], NULL, allocate, (void *)(&thread_id[i]));
   } //for i
+
   for (i=0; i < NUM_THREADS; i++) {
     pthread_join(threads[i], NULL);
   } //for i
@@ -139,9 +124,7 @@ int main(int argc, char *argv[])
   } //else
 
   for (i=0; i < NUM_THREADS * NUM_ITEMS; i++) {
-    if (malloc_items[i].free == 0) {
-      FREE(malloc_items[i].address);
-    } //if
+    FREE(malloc_items[i].address);
   } //for i
 
   return 0;

@@ -10,8 +10,13 @@ void * first_block = NULL;
 int empty_heap = 1;
 char * heap_end = NULL;
 
+
+
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-__thread struct _meta_t temp;
+
+__thread meta_t first_free_nolock = NULL;
+__thread void * first_block_nolock = NULL;
+__thread char * heap_end_noblock;
 /////////////////////////Helper function///////////////////////////////
 void print_linked_list(){
   meta_t b = first_free;
@@ -80,9 +85,9 @@ meta_t create_block(size_t rqt_size){
   if((sbrk(BLOCK_SIZE + rqt_size)) == (void *)-1){//increment break pointer
     return NULL;
   }
-  printf("nb: %p  heap_end: %p",nb, heap_end);
+  //printf("nb: %p  heap_end: %p",nb, heap_end);
   heap_end = (char *)nb + BLOCK_SIZE + rqt_size;
-  printf(" nb: %p  heap_end: %p\n",nb, heap_end);
+  //printf(" nb: %p  heap_end: %p\n",nb, heap_end);
   //if allocation succeeds
   nb->dsize = rqt_size;
 
@@ -90,7 +95,7 @@ meta_t create_block(size_t rqt_size){
     empty_heap = 0;
     first_block = nb;
   }
-  printf("bf_create_return\n");
+  //printf("bf_create_return\n");
   return nb;
 }
 
@@ -120,6 +125,99 @@ meta_t bf_find_block(size_t rqt_size){
 }
 
 void * bf_malloc(size_t size){
+  size_t rqt_size = align8(size);//align address for 64-based system
+  meta_t cb;
+  //printf("bf_malloc\n");
+  pthread_mutex_lock(&lock);
+  if(first_free != NULL) {//if the list is not empty, search for a fitting block first
+    //printf("bf_find_block\n");
+    cb = bf_find_block(rqt_size);//the only difference from ff
+    if(cb != NULL) {//if the fitting block is found, we should kick it out of the list
+      
+      if ((cb->dsize - rqt_size) >= ( BLOCK_SIZE + SPLIT_THR)){//block splitting
+	//printf("bf_split_block\n");
+	split_block(cb, rqt_size);
+      }else{
+	//printf("bf_no_split_block\n");
+	if(cb->fprev)
+	  cb->fprev->fnext = cb->fnext;
+	if(cb->fnext)
+	  cb->fnext->fprev = cb->fprev;
+	if(first_free == cb){//corner case: free only existing block
+	  first_free = NULL;
+	}
+      }
+     
+    } else {//if not found, create the block
+      //printf("bf_create_block1\n");
+      cb = create_block(rqt_size);
+      if(cb == NULL){//the creation fails returns NULL
+       	pthread_mutex_unlock(&lock);
+	return NULL;
+      }
+    }
+  } else { //if the list is empty, create the block directly
+    //printf("bf_create_block2\n");
+    cb = create_block(rqt_size);
+    //printf("bf_returnfrom_create_block2, cb = %p\n",cb);
+    if(cb == NULL){//if the creation fails
+      //printf("bf_returnfrom_create_block2 if cb = NULL");
+      pthread_mutex_unlock(&lock);
+      return NULL;
+    }
+  }
+  //printf("bf_before unlock\n");
+  pthread_mutex_unlock(&lock);
+  return ((char *)cb + BLOCK_SIZE);
+}
+
+//////////////////////////no lock version////////////////////////////////////////
+meta_t create_block_nolock(size_t rqt_size){
+  meta_t nb;
+  nb = sbrk(0);//get the start of the new block by pointing it at the current break pointer
+  if((sbrk(BLOCK_SIZE + rqt_size)) == (void *)-1){//increment break pointer
+    return NULL;
+  }
+  printf("nb: %p  heap_end: %p",nb, heap_end);
+  heap_end = (char *)nb + BLOCK_SIZE + rqt_size;
+  printf(" nb: %p  heap_end: %p\n",nb, heap_end);
+  //if allocation succeeds
+  nb->dsize = rqt_size;
+  
+  if(empty_heap == 1){
+    empty_heap = 0;
+    first_block = nb;
+  }
+  printf("bf_create_return\n");
+  return nb;
+}
+
+
+
+meta_t find_block_nolock(size_t rqt_size){
+  meta_t cb = first_free;
+  meta_t ans = NULL;//result
+  int mim = 1000000000;//keep track of the smallest result
+  int diff;//keep track of smallest difference between requested size and block size
+  
+  while(cb != NULL){
+    diff = cb->dsize - rqt_size;
+    if(diff == 0){
+      ans = cb;
+      break;
+    }else if(diff > 0){//if a fitting block is found, update
+      if(diff < mim){
+	mim = diff;
+	ans = cb;
+      }
+    }
+    cb = cb->fnext;
+  }
+ 
+  return ans;
+}
+
+void * ts_malloc_nolock(size_t size){
   size_t rqt_size = align8(size);//align address for 64-based system
   meta_t cb;
   printf("bf_malloc\n");
@@ -165,54 +263,6 @@ void * bf_malloc(size_t size){
   return ((char *)cb + BLOCK_SIZE);
 }
 
-//////////////////////////no lock version////////////////////////////////////////
-/*
-meta_t create_block_nolock(size_t rqt_size,meta_t address){
-  meta_t nb;
-  nb = address;//get the start of the new block by pointing it at the current break pointer
-  heap_end = heap_end + BLOCK_SIZE + rqt_size;
-  //if allocation succeeds
-  nb->dsize = rqt_size;
-
-  if(empty_heap == 1){
-    empty_heap = 0;
-    first_block = nb;
-  }
-  return nb;
-}
-
-meta_t bf_find_block_nolock(size_t rqt_size, meta_t address){
-  meta_t cb = first_free;
-  meta_t ans = NULL;//result
-  int mim = 1000000000;//keep track of the smallest result
-  int diff;//keep track of smallest difference between requested size and block size
-  
-  while(cb != NULL){
-    diff = cb->dsize - rqt_size;
-    if(diff == 0){
-      ans = cb;
-      break;
-    }else if(diff > 0){//if a fitting block is found, update
-      if(diff < mim){
-	mim = diff;
-	ans = cb;
-      }
-    }
-    cb = cb->fnext;
-  }
- 
-  return ans;
-}
-*/
-/*
-void * ts_malloc_nolock(size_t size){
-  size_t rqt_size = align8(size);//align address for 64-based system
-  meta_t cb;
-
-  cb = create_block_nolock(rqt_size, &temp);
-  return (char *)cb + BLOCK_SIZE;
-}
-*/
 ///////////////////////////////////free////////////////////////////////
 /*
 DESCRIPTION
@@ -280,7 +330,7 @@ meta_t coalesce(meta_t cb){
 
 
 void bf_free(void *p){
-  printf("bf_free\n");
+  //printf("bf_free\n");
   meta_t b;
   pthread_mutex_lock(&lock);
   if(valid_addr(p)) {//first check if the address is valid
@@ -306,8 +356,9 @@ void bf_free(void *p){
   }
   pthread_mutex_unlock(&lock);
 }
-/*
+
 void ts_free_nolock(void *p){
+  printf("bf_free\n");
   meta_t b;
   if(valid_addr(p)) {//first check if the address is valid
 
@@ -331,7 +382,7 @@ void ts_free_nolock(void *p){
    
   }
 }
-*/
+
 ////////////////////////////////////
 /*
 unsigned long get_data_segment_size(){

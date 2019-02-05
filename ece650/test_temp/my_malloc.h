@@ -12,6 +12,8 @@ struct _meta_t{
   size_t dsize;//size of data block
   meta_t fprev;
   meta_t fnext;
+  void * list_head;
+  void * freelist_head;
 };
 
 
