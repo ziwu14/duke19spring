@@ -6,11 +6,10 @@
 //manually defined threshold for block splitting
 #define SPLIT_THR 8
 
+//8+4+4+8+8+8=40
 typedef struct _meta_t * meta_t;
 struct _meta_t{
   size_t dsize;//size of data block
-  meta_t prev;//pointing to meta block
-  meta_t next;//pointing to next meta block
   int free;//1 is free; 0 is not free
   int padding;//2 int  = 8 bytes, in order to make meta multiple of 8(no extra use)
   void *ptr;//point to data

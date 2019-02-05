@@ -1,19 +1,20 @@
 #include "my_malloc.h"
 #include <sys/types.h>
 #include <unistd.h>
-#
+
 #include <stdio.h>
 
-void * first_block = NULL;//intialize the first block to NULL i.e. no block is allocated
-void * first_free = NULL;
+meta_t first_free = NULL;
+void * first_block = NULL;
+int empty_heap = 1;
 
 /////////////////////////Helper function///////////////////////////////
 void print_linked_list(){
-  meta_t b = first_block;
+  meta_t b = first_free;
   printf("Blocks in my List:\n");
   while(b){
-    printf("b: %p b.next: %p b.prev: %p b.free: %d b.size: %ld\n" , b, b->next, b->prev, b->free, b->dsize );
-    b = b->next;
+    printf("b: %p b.next: %p b.prev: %p b.free: %d b.size: %ld\n" , b, b->fnext, b->fprev, b->free, b->dsize );
+    b = b->fnext;
   }
 }
 
@@ -26,7 +27,7 @@ rqt_size--requested size
 OUTPUT
 pointer to the new block
  */
-meta_t create_block(meta_t last, size_t rqt_size){
+meta_t create_block(size_t rqt_size){
   meta_t nb;
   nb = sbrk(0);//get the start of the new block by pointing it at the current break pointer
   if(sbrk(BLOCK_SIZE + rqt_size) == (void *)-1){//increment break pointer
@@ -34,12 +35,12 @@ meta_t create_block(meta_t last, size_t rqt_size){
   }
   //if allocation succeeds
   nb->dsize = rqt_size;
-  nb->next = NULL;//intialize the next to NULL
   nb->free = 0;//not free
   nb->ptr = (meta_t) ((char *) nb + BLOCK_SIZE);
-  nb->prev = last;//connect two adjacent block
-  if(last != NULL){
-    last->next = nb;
+
+  if(empty_heap == 1){
+    empty_heap = 0;
+    first_block = nb;
   }
   return nb;
 }
@@ -56,17 +57,20 @@ void split_block(meta_t cb,size_t rqt_size){
   nb = (meta_t)((char *)cb->ptr + rqt_size);//start of data block + requested size
   nb->dsize = cb->dsize - rqt_size - BLOCK_SIZE;
   nb->free = 1;
-  nb->next = cb->next;
   nb->fnext = cb->fnext;
   nb->fprev = cb->fprev;
-  if(nb->next){//corner case
-    nb->next->prev = nb;
-  }
-  nb->prev = cb;
   nb->ptr = (char *) nb + BLOCK_SIZE;
 
+  if(cb->fprev)
+    cb->fprev->fnext = nb;
+  if(cb->fnext)
+    cb->fnext->fprev = nb;
+  
   cb->dsize = rqt_size;
-  cb->next = nb;
+
+  if(first_free == cb){//corner case
+    first_free = nb;
+  }
 }
 
 /*
@@ -121,19 +125,16 @@ void * bf_malloc(size_t size){
       cb->free = 0;
     } else {//if not found, create the block
       
-      cb = create_block(last, rqt_size);
+      cb = create_block(rqt_size);
       if(cb == NULL)//the creation fails returns NULL
 	return NULL;
       
     }
   } else { //if the list is empty, create the block directly
-    cb = create_block(NULL, rqt_size);
+    cb = create_block(rqt_size);
     
     if(!cb)//if the creation fails
       return NULL;
-    if(first_block == NULL){
-      first_block = cb;
-    }
   }
   return cb->ptr;
 }
@@ -157,26 +158,13 @@ int valid_addr(void *ptr) {
   return 0;
 }
 
-/*
-coalesce the current block and its next block
-and return the pointer to the current block
- */
-meta_t coalesce(meta_t cb){
-  if (cb->next && cb->next->free) {//if next is not NULL and next block is free
-    cb->dsize += (BLOCK_SIZE + cb->next->dsize);
-    cb->next = cb->next->next;
-    if(cb->next){//set the prev
-      cb->next->prev = cb;
-    }
-  }
-  return cb;
-}
-
 void locate_free(meta_t target){
   meta_t cb = first_free;
   meta_t last;
   if(cb == NULL){//if there is no free block
     first_free = target;
+    target->fprev = NULL;
+    target->fnext = NULL;
   }else{//traverse
     while(cb != NULL){
       if(cb > target){//if a fitting block is found, update
@@ -185,7 +173,7 @@ void locate_free(meta_t target){
 	}
 	target->fprev = cb->fprev;
 	target->fnext = cb;
-	cb->fprev = cb;
+	cb->fprev = target;
 	break;
       }
       last = cb;
@@ -200,6 +188,22 @@ void locate_free(meta_t target){
 }
 
 
+/*
+coalesce the current block and its next block
+and return the pointer to the current block
+ */
+meta_t coalesce(meta_t cb){
+  cb->dsize += (BLOCK_SIZE + cb->fnext->dsize);
+  cb->fnext = cb->fnext->fnext;
+  if(cb->fnext){//set the prev
+    cb->fnext->fprev = cb;
+  }
+  
+  return cb;
+}
+
+
+
 void bf_free(void *p){
   meta_t b;
   if(valid_addr(p)) {//first check if the address is valid
@@ -208,20 +212,19 @@ void bf_free(void *p){
     locate_free(b);
     
     //coalesce prev block
-    if(b->prev && b->prev->free){
-      b = coalesce(b->prev);
-    }
-    if(b->next){//if next is NULL
-      coalesce(b);//if no, check if coalesce is available
-    }else {//yes
-      if(b->prev){//corner case: current block is the only block
-	b->prev->next = NULL;
-      }else{//both prev and next are NULL
-	first_block = NULL;
-	first_free = NULL;
+    if(b->fprev && ((char *)b->fprev + BLOCK_SIZE + b->fprev->dsize == (char *)b )){
+      if(first_free == b){
+	first_free = b->fprev;
       }
-      if(brk(b) == 0){}
+      b = coalesce(b->fprev);
     }
+    if(b->fnext && ((char *)b + BLOCK_SIZE + b->dsize == (char *)b->fnext )){//if next is NULL
+      if(first_free == b->fnext){
+	first_free = b;
+      }
+      coalesce(b);//if no, check if coalesce is available
+    }
+   
   }
 }
 
@@ -238,7 +241,7 @@ unsigned long get_data_segment_free_space_size(){
     if(ptr->free == 1){
       size += (ptr->dsize + BLOCK_SIZE);
     }
-    ptr = ptr->next;
+    ptr = ptr->fnext;
   }
   return size;
 }
