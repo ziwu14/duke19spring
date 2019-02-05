@@ -5,8 +5,11 @@
 #include <unistd.h>
 #include "my_malloc.h"
 
-#define MALLOC(sz) bf_malloc(sz)
-#define FREE(p)    bf_free(p)
+#define MALLOC(sz) ts_malloc_nolock(sz)
+#define FREE(p)    ts_free_nolock(p)
+
+//#define MALLOC(sz) bf_malloc(sz)
+//#define FREE(p)    bf_free(p)
 /*
 #ifdef LOCK_VERSION
 #define MALLOC(sz) ts_malloc_lock(sz)
