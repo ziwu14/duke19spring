@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Search Result(Driver)</h1>
+<div class="container">
+  {% for record in search_ride %}
+    <p>User: {{ record.user }}</p>
+    <p>Destination: {{ record.destination }}</p>
+    <p>Date: {{ record.date_time}}</p>
+    <p>Number of passengers: {{ record.num_passengers }}</p>
+    <p>Type: {{ record.type }}</p>
+    <p>Special : {{ record.special_requests }}</p>
+    <p>Share or not: {{ record.status_share }}</p>
+    {% if user.driver.max_num_passengers >= record.num_passengers and record.status_confirm == False and user != record.user %}
+      {% if user.driver.type == record.type or record.type == '4' %}
+        <a href="{% url 'rideRequest:accept_view' record.id %}">Accept</a>
+      {% endif %}
+    {% else %}
+      {% if user.username == record.driver_name %}
+        <a href="{% url 'rideRequest:complete_view' record.id %}">Complete!</a>
+      {% endif %}
+    <h4>Either your car's condition does not meet the requirements or order has beed accepted</h4>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% endblock %}

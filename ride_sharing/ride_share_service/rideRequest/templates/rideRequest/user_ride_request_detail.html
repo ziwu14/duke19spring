@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Your Request Detail</h1>
+<div class="container">
+  {% for record in personal_ride_list %}
+    <p>ID: {{ record.id }}</p>
+    <p>Destination: {{ record.destination }}</p>
+    <p>Date: {{ record.date_time}}</p>
+    <p>Number of passengers: {{ record.num_passengers }}</p>
+    <p>Type: {{ record.type }}</p>
+    <p>Special : {{ record.special_requests }}</p>
+    <p>Share or not: {{ record.status_share }}</p>
+    {% if record.status_confirm == False %}
+      <a href="{% url 'rideRequest:delete_view' record.id %}">Delete</a>
+    {% else %}
+      <h4>Driver username: {{ record.driver_name }}</h4>
+      <h4>Type: {{ record.driver_vehicle_type }}</h4>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% endblock %}

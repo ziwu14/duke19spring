@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Share List</h1>
+<div class="container">
+  {% for record in eligible_share %}
+    <p>ID: {{ record.id }}</p>
+    <p>Destination: {{ record.destination }}</p>
+    <p>Date: {{ record.date_time}}</p>
+    <p>Number of passengers: {{ record.num_passengers }}</p>
+    <p>Type: {{ record.type }}</p>
+    <p>Special : {{ record.special_requests }}</p>
+    <p>Share or not: {{ record.status_share }}</p>
+    <a href="{% url 'rideRequest:join_view' record.id num_passengers%}">Join!</a>
+  {% endfor %}
+</div>
+
+{% endblock %}

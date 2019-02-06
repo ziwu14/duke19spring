@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <!--{{ registered }}-->
+  {% if user.driver.max_num_passengers > 0 %}
+    <h1>You have already registered as a driver</h1>
+    <li><a href="{% url 'rideRequest:driversearch' %}">Begin Search!</a></li>
+  {% else %}
+    <h1>Driver Register</h1>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <input type="submit" class='btn btn-default' value="Driver Register">
+    </form>
+    {% endif %}
+  </div>
+{% endblock %}
