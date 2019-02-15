@@ -99,14 +99,17 @@ void Server_to_Clients(vector<addrPack> &client_List,struct timeval timeout,int 
 	  
 	  char clientIP[16]="\0";
 	  char clientPort[16]="\0";
-	  obtainPeerAddr(client_fd,clientIP,clientPort);
-	  cout<< "client ip: "<<clientIP<<"client port: "<<clientPort<<endl;
-
+	  recv(client_fd,clientIP,16,0);
+	  recv(client_fd,clientPort,16,0);
+	  
+	  //obtainPeerAddr(client_fd,clientIP,clientPort);
+	  cout<< "client ip: "<<clientIP<<" client port: "<<clientPort<<endl;
+	  
 	  FD_SET(client_fd, &reads);
 
 	  addrPack temp;
-	  temp.fd = client_fd;
-	  strcpy(temp.ip,clientIP);
+	  temp.fd = client_fd;//comunication file
+	  strcpy(temp.ip,clientIP);//tell neighbors' listen address
 	  strcpy(temp.port, clientPort);
 	  client_List.push_back(temp);
 	 
@@ -115,8 +118,9 @@ void Server_to_Clients(vector<addrPack> &client_List,struct timeval timeout,int 
 	  
 	  if(fd_max < client_fd){//update fd_max when new socket is involved
 	    fd_max = client_fd;
-	    cout<<"new client is connecting"<<endl;
+	    
 	  }
+	  cout<<"new client is connecting with"<<endl;
 
 	  client_count++;
 	  
