@@ -46,6 +46,7 @@ int createListenSocket(){
   //3.listen
   if(listen(listen_fd,7) == -1){
     perror("listen() fails");
+    close(listen_fd);
     exit(EXIT_FAILURE);
   }
   return listen_fd;
@@ -142,7 +143,10 @@ void Clients_to_Clients(const vector<addrPack> &List){
     if(i == n-1){
       right = 0;
     }
-    
+    char id[16] = "\0";
+    sprintf(id,"%lu",i);
+    //use fixed size to send/recv message, don't use sizeof() 
+    send(List[i].fd, id,16,0);
     send(List[i].fd, List[left].ip,16,0);
     send(List[i].fd, List[left].port,16,0);
     send(List[i].fd, List[right].ip,16,0);
