@@ -13,20 +13,8 @@
 
 using namespace std;
 
-void obtainMyAddr(int socket_fd, char *myIP, char*myPort){
+void obtain_fdPort(int socket_fd, char*myPort){
 
-    
-  char host[100]={0};
-  size_t name_sz = sizeof(host);
-  gethostname(host,name_sz);
-  struct hostent *hp;
-  hp = gethostbyname(host);
-  char ip[16];
-  struct sockaddr_in sock_addr;
-  sock_addr.sin_addr = *((struct in_addr*) hp->h_addr_list[0]);
-  inet_ntop(AF_INET, &sock_addr.sin_addr, ip, sizeof(ip));
-  strcpy(myIP,ip);
-  
   struct sockaddr_in myAddr;
   //bzero(&myAddress, sizeof(myAddress));
   socklen_t len = sizeof(myAddr);
@@ -45,63 +33,53 @@ void obtainPeerAddr(int socket_fd, char *ipPtr, char*portPtr){
     int temp = ntohs(peerAddr.sin_port);
     sprintf(portPtr,"%d",temp);
 
-    cout<<"accept address "<<ipPtr<<":"<<portPtr<<endl;
+    //cout<<"accept address "<<ipPtr<<":"<<portPtr<<endl;
 }
 
 
-int createListenSocket(){
-  int listen_fd;
-
-  //1. create a lisening socket -- defined by protocol, type
-  listen_fd = socket(AF_INET, SOCK_STREAM, 0);//family, type, anything
-  if(listen_fd < 0){
-    perror("socket() fails");
-    exit(EXIT_FAILURE);
-  }
-  
-    
-  //2.listen
-  if(listen(listen_fd,7) == -1){
-    perror("listen() fails");
-    exit(EXIT_FAILURE);
-  }
-
-  char myIP[16]={0};
-  char myPort[16]={0};
-  obtainMyAddr(listen_fd, myIP,myPort);
-  cout<<"listen_fd: ip: "<<myIP<<" port: "<<myPort<<endl;
-
-  return listen_fd;
-}
-
-int createConnectSocket(const char *myIP,const char *myPort){
-  struct sockaddr_in sock_address;
-  int fd;
-
-  //1. create a lisening socket -- defined by protocol, type
-  fd = socket(AF_INET, SOCK_STREAM, 0);//family, type, anything
+int createBindedSocket(char * ip, int & port){
+  //1.create socket
+  int fd = socket(AF_INET, SOCK_STREAM, 0);//family, type, anything
   if(fd < 0){
     perror("socket() fails");
     exit(EXIT_FAILURE);
   }
-  
-  //2.connect to server via connect function which could return information of server socket address
+  //2. bind() to an address -- defined by ip, port, protocol-> server_address
+  //otherwise, it will be automatically allocated a port, clients have no idea what it is
+  struct sockaddr_in fd_address;
+  memset(&fd_address, 0, sizeof(fd_address));//clear server_address
+  fd_address.sin_family = AF_INET;//address family
+  fd_address.sin_addr.s_addr = inet_addr(ip);//ip address
+  fd_address.sin_port = htons(port);//port
+  socklen_t address_size = sizeof(fd_address);
+  int status;
+  while((status= bind(fd, (struct sockaddr*)&fd_address, address_size)) != 0){
+    port++;
+    fd_address.sin_port = htons(port);
+  }
+  return fd;
+}
+
+void connectSocket(int fd,const char *target_ip,const char *target_port){
+  struct sockaddr_in sock_address;
+
   memset(&sock_address, 0, sizeof(sock_address));
   sock_address.sin_family = AF_INET;
-  sock_address.sin_addr.s_addr = inet_addr(myIP);
-  sock_address.sin_port = htons(atoi(myPort));
+  sock_address.sin_addr.s_addr = inet_addr(target_ip);
+  sock_address.sin_port = htons(atoi(target_port));
 
-  cout<<"try to connect "<<myIP<<":"<<myPort<<endl;
+  cout<<endl;
+  cout<<"try to connect "<<target_ip<<":"<<target_port<<endl;
   if ( connect(fd, (struct sockaddr*)&sock_address, sizeof(sock_address)) == -1  ){
     perror("connect() fails");
     exit(EXIT_FAILURE);
   }
   cout<<"connect successful"<<endl;
-  return fd;
+  cout<<endl;
 }
 
 
-void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,const char *leftIP,const char *leftPort,const char *rightIP,const char *rightPort){
+void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,const char *leftIP,const char *left_rightPort,const char *rightIP,const char *right_leftPort){
 
   fd_set reads;
   FD_ZERO(&reads);//00000000000000000
@@ -111,18 +89,15 @@ void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,c
   int neighbor_fd;
   struct sockaddr_in neighbor_address;
   socklen_t address_size;
-
-  //cout<<"listen_fd: "<<listen_fd<<endl;
-  //cout<<"left neighbor "<<leftIP<<":"<<leftPort<<endl;
-  //cout<<"right neighbor "<<rightIP<<":"<<rightPort<<endl;
-  //char myIP[16]={0};
-  //char myPort[16]={0};
-  //obtainMyAddr(listen_fd, myIP,myPort);
-  //cout<<"listen_fd: ip: "<<myIP<<" port: "<<myPort<<endl;
-  
-  
+  /*
+  cout<<endl;
+  cout<<"listen_fd: "<<listen_fd<<endl;
+  cout<<"left neighbor's right connector: "<<leftIP<<":"<<left_rightPort<<endl;
+  cout<<"right neighbor's left connector: "<<rightIP<<":"<<right_leftPort<<endl;
+  cout<<endl;
+  */
   int neighbor_count = 0;
-  while(neighbor_count != 2){//only 2 neighbors
+  while(neighbor_count < 2){//only 2 neighbors
     
     fd_set temp = reads;//select will reset the fd_set so we need a temporary temp
     int status = select(fd_max + 1, &temp, 0, 0, &timeout);//polling all the fds
@@ -137,7 +112,6 @@ void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,c
     for(int fd = 0; fd < fd_max + 1; fd++){
       if(FD_ISSET(fd, &temp)){//check which file descriptor changes
 
-	cout<<"something is ready" <<endl;
 	if(fd == listen_fd){//connection request: add the client_fd to the fd_set
 	  
 	  address_size = sizeof(neighbor_fd);
@@ -146,13 +120,16 @@ void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,c
 	  char nIP[16]="\0";
 	  char nPort[16]="\0";
 	  obtainPeerAddr(neighbor_fd,nIP,nPort);
+
+	  cout<<endl;
 	  cout<<"accept "<<nIP<<":"<<nPort<<endl;
+	  cout<<endl;
 	  
 	  int a = strcmp(nIP,leftIP);
-	  int b = strcmp(nPort,leftPort);
+	  int b = strcmp(nPort,left_rightPort);
 	  int c = strcmp(nIP,rightIP);
-	  int d = strcmp(nPort,rightPort);
-	  if( (a && b) || (c && d)){
+	  int d = strcmp(nPort,right_leftPort);
+	  if( ( (a == 0) && (b == 0) ) || ( (c == 0) && (d == 0) )){
 	    cout<<"accept fd:"<<neighbor_fd<<endl;
 	    FD_SET(neighbor_fd, &reads);
 	    fd_List.push_back(neighbor_fd);
@@ -162,7 +139,7 @@ void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,c
 	  
 	    if(fd_max < neighbor_fd){//update fd_max when new socket is involved
 	      fd_max = neighbor_fd;
-	      cout<<"new client is connecting"<<endl;
+	      //cout<<"new client is connecting"<<endl;
 	    }
 
 	    neighbor_count++;
@@ -180,62 +157,98 @@ void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,c
 
 int main(int argc, char *argv[])
 {
-  
-  if(argc != 2){
-    perror("Usage: ./server [server ip]");
+  //0. check argc & get host ip
+  if(argc != 3){
+    perror("Usage: ./server [server ip] [port]");
     exit(EXIT_FAILURE);
   }
 
-  //1.1.create listen socket
-  int listen_fd = createListenSocket();
-
-  char myIP[16]={0};
-  char myPort[16]={0};
-  obtainMyAddr(listen_fd, myIP,myPort);
-  //cout<<"my ip: "<<myIP<<" my port: "<<myPort<<endl;
-  //1.2.create socket -- socket -> local
-  int server_fd = createConnectSocket(argv[1], PORT);
-  send(server_fd,myIP,16,0);//send listen socket address to server
-  send(server_fd,myPort,16,0);
+  char host[100]={0};
+  size_t name_sz = sizeof(host);
+  gethostname(host,name_sz);
+  struct hostent *hp;
+  hp = gethostbyname(host);
+  char ip[16];//local ip address
+  struct sockaddr_in sock_addr;
+  sock_addr.sin_addr = *((struct in_addr*) hp->h_addr_list[0]);
+  inet_ntop(AF_INET, &sock_addr.sin_addr, ip, sizeof(ip));
   
-  //2.1.recieve left and right neighbors info
-  char id[16]="\0";//used to trace
+  //1.create all 4 sockets we will use: to server, two connectors, and the listner
+  int port = atoi(argv[2]);
+  int server_fd = createBindedSocket(ip,port);
+  int listen_fd = createBindedSocket(ip,port);
+  if(listen(listen_fd,7) == -1){
+    perror("listen() fails");
+    close(listen_fd);
+    exit(EXIT_FAILURE);
+  }
+  int left_fd = createBindedSocket(ip,port);
+  int right_fd = createBindedSocket(ip,port);
+
+  char listen_fdPort[16] = {0};
+  char left_fdPort[16] = {0};
+  char right_fdPort[16] ={0};
+  obtain_fdPort(listen_fd, listen_fdPort);
+  obtain_fdPort(left_fd, left_fdPort);
+  obtain_fdPort(right_fd, right_fdPort);
+  //2.connet to server and send address of 1 listener and 2 connectors
+  connectSocket(server_fd,argv[1],argv[2]);//connect to server
+  
+  send(server_fd,ip,16,0);//send 
+  send(server_fd,listen_fdPort,16,0);
+  send(server_fd,left_fdPort,16,0);
+  send(server_fd,right_fdPort,16,0);
+  cout<<" ip: "<<ip<<" listenPort: "<<listen_fdPort<<" leftPort: "<<left_fdPort<<" rightPort: "<<right_fdPort<<endl;
+  //3.recieve info about client's id, how to connect to its neighbor's listener, and check by left and right port (limitation on two communication channels)
+
+  char id[16]="\0";//used to trace the result
   recv(server_fd,id,16,0);
+  
   char left_ip[16]="\0";
   recv(server_fd,left_ip,16,0);
-  char left_port[16]="\0";
-  recv(server_fd,left_port,16,0);
+  char left_listenPort[16]="\0";
+  recv(server_fd,left_listenPort,16,0);//connector will try to connecto via listenPort
+  char left_rightPort[16]="\0";
+  recv(server_fd,left_rightPort,16,0);//after accept(), will check if this is the correct port
+  cout<<"left neighbor-- ip: "<< left_ip<<" listenPort: "<<left_listenPort<<" rightPort: "<<left_rightPort <<endl;
+  
   char right_ip[16]="\0";
   recv(server_fd,right_ip,16,0);
-  char right_port[16]="\0";
-  recv(server_fd,right_port,16,0);
-  printf("my ID: %s\n",id);
-  printf("left neighbor: %s:%s\n",left_ip,left_port);
-  printf("right neighbor: %s:%s\n",right_ip,right_port);
+  char right_listenPort[16]="\0";//connect()
+  recv(server_fd,right_listenPort,16,0);
+  char right_leftPort[16]="\0";//after accept()
+  recv(server_fd,right_leftPort,16,0);
+  cout<<"right neighbor-- ip: "<< right_ip<<" listenPort: "<<right_listenPort<<" leftPort: "<<right_leftPort <<endl;
   
-  //2.2. connect to neighbor: passive & active
+  //printf("my ID: %s\n",id);
+  //printf("left neighbor: %s:%s\n",left_ip,left_port);
+  //printf("right neighbor: %s:%s\n",right_ip,right_port);
+  
+  //4. connect to neighbors: passive & active
   struct timeval timeout;
   timeout.tv_sec = 5;
   timeout.tv_usec = 5000;
   vector<int> accept_fds;//passive accepted sockets
-  int left_fd;
-  int right_fd;
   if(atoi(id) %2 == 0){
     cout<<"acceptor first"<<endl;
-    acceptNeighbors(accept_fds,timeout,listen_fd,left_ip,left_port,right_ip,right_port);
-    left_fd = createConnectSocket(left_ip,left_port);
-    right_fd = createConnectSocket(right_ip,right_port);
+    acceptNeighbors(accept_fds,timeout,listen_fd,left_ip,left_rightPort,right_ip,right_leftPort);
+
+    connectSocket(left_fd, left_ip,left_listenPort);
+    connectSocket(right_fd,right_ip,right_listenPort);
   }else{
     cout<<"connector first"<<endl;
-    sleep(5);//since acceptor is a while loop
-    left_fd = createConnectSocket(left_ip,left_port);
-    right_fd = createConnectSocket(right_ip,right_port);
-    acceptNeighbors(accept_fds,timeout,listen_fd,left_ip,left_port,right_ip,right_port);
+    sleep(1);//since acceptor is a while loop
+    
+    connectSocket(left_fd, left_ip,left_listenPort);
+    connectSocket(right_fd,right_ip,right_listenPort);
+
+    acceptNeighbors(accept_fds,timeout,listen_fd,left_ip,left_rightPort,right_ip,right_leftPort);
   }
-  
+  /*
   for(size_t i = 0; i < accept_fds.size(); i++){
     cout<< accept_fds[i]<<endl;
   }
+  */
   //3. select() to check if server_fd and accept_fds
   
   
@@ -243,6 +256,7 @@ int main(int argc, char *argv[])
   for(size_t i = 0; i < accept_fds.size(); i++){
     close(accept_fds[i]);
   }
+  
   close(left_fd);
   close(right_fd);
   

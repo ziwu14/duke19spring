@@ -17,7 +17,9 @@ using namespace std;
 typedef struct _addrPack{
   int fd;
   char ip[16];
-  char port[16];
+  char listenPort[16];
+  char leftPort[16];
+  char rightPort[16];
 }addrPack;
 
 int createListenSocket(){
@@ -98,19 +100,24 @@ void Server_to_Clients(vector<addrPack> &client_List,struct timeval timeout,int 
 
 	  
 	  char clientIP[16]="\0";
-	  char clientPort[16]="\0";
+	  char client_listenPort[16]="\0";
+	  char client_leftPort[16]="\0";
+	  char client_rightPort[16]="\0";
 	  recv(client_fd,clientIP,16,0);
-	  recv(client_fd,clientPort,16,0);
-	  
+	  recv(client_fd,client_listenPort,16,0);
+	  recv(client_fd,client_leftPort,16,0);
+	  recv(client_fd,client_rightPort,16,0);
 	  //obtainPeerAddr(client_fd,clientIP,clientPort);
-	  cout<< "client ip: "<<clientIP<<" client port: "<<clientPort<<endl;
+	  //cout<< "client ip: "<<clientIP<<" client port: "<<clientPort<<endl;
 	  
 	  FD_SET(client_fd, &reads);
 
 	  addrPack temp;
 	  temp.fd = client_fd;//comunication file
 	  strcpy(temp.ip,clientIP);//tell neighbors' listen address
-	  strcpy(temp.port, clientPort);
+	  strcpy(temp.listenPort, client_listenPort);
+	  strcpy(temp.leftPort, client_leftPort);
+	  strcpy(temp.rightPort, client_rightPort);
 	  client_List.push_back(temp);
 	 
 	  //cout<<"client ip: "<<client_List[client_count].ip<<endl;
@@ -118,7 +125,7 @@ void Server_to_Clients(vector<addrPack> &client_List,struct timeval timeout,int 
 	  
 	  if(fd_max < client_fd){//update fd_max when new socket is involved
 	    fd_max = client_fd;
-	    
+	
 	  }
 	  cout<<"new client is connecting with"<<endl;
 
@@ -151,10 +158,14 @@ void Clients_to_Clients(const vector<addrPack> &List){
     sprintf(id,"%lu",i);
     //use fixed size to send/recv message, don't use sizeof() 
     send(List[i].fd, id,16,0);
+    
     send(List[i].fd, List[left].ip,16,0);
-    send(List[i].fd, List[left].port,16,0);
+    send(List[i].fd, List[left].listenPort,16,0);
+    send(List[i].fd, List[left].rightPort,16,0);
+
     send(List[i].fd, List[right].ip,16,0);
-    send(List[i].fd, List[right].port,16,0);
+    send(List[i].fd, List[right].listenPort,16,0);
+    send(List[i].fd, List[right].leftPort,16,0);
   }
 }
 
