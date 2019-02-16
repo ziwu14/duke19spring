@@ -9,8 +9,8 @@
 #include <stdio.h>
 #include <cmath>
 #include <vector>
+#include <time.h>
 
-#define PORT 4444
 #define NUM_PLAYER 2
 
 using namespace std;
@@ -23,7 +23,7 @@ typedef struct _addrPack{
   char rightPort[16];
 }addrPack;
 
-int createListenSocket(){
+int createListenSocket(int port){
   struct sockaddr_in server_address;
   int listen_fd;
 
@@ -39,7 +39,7 @@ int createListenSocket(){
   memset(&server_address, 0, sizeof(server_address));//clear server_address
   server_address.sin_family = AF_INET;//address family
   server_address.sin_addr.s_addr = htonl(INADDR_ANY);//ip address
-  server_address.sin_port = htons(PORT);//port
+  server_address.sin_port = htons(port);//port
 
   socklen_t address_size = sizeof(server_address);
   if(bind(listen_fd, (struct sockaddr*)&server_address, address_size) == -1){//return socket address
@@ -128,7 +128,7 @@ void Server_to_Clients(vector<addrPack> &client_List,struct timeval timeout,int 
 	    fd_max = client_fd;
 	
 	  }
-	  cout<<"new client is connecting with"<<endl;
+	  cout<<"new client is connected"<<endl;
 
 	  client_count++;
 	  
@@ -142,7 +142,7 @@ void Server_to_Clients(vector<addrPack> &client_List,struct timeval timeout,int 
   }
 }
 
-void Clients_to_Clients(const vector<addrPack> &List){
+void Clients_to_Clients(const vector<addrPack> &List, char * num_player){
   size_t n = List.size();
   cout<<"n: "<<n<<endl;
   for(size_t i = 0; i < n; i++){
@@ -158,8 +158,9 @@ void Clients_to_Clients(const vector<addrPack> &List){
     char id[16] = "\0";
     sprintf(id,"%lu",i);
     //use fixed size to send/recv message, don't use sizeof() 
+    send(List[i].fd,num_player,16,0);
     send(List[i].fd, id,16,0);
-    
+   
     send(List[i].fd, List[left].ip,16,0);
     send(List[i].fd, List[left].listenPort,16,0);
     send(List[i].fd, List[left].rightPort,16,0);
@@ -178,7 +179,7 @@ int main(int argc, char *argv[])
     exit(EXIT_FAILURE);
   }
   //1.setupthe listening socket
-  int listen_fd = createListenSocket();
+  int listen_fd = createListenSocket(atoi(argv[1]));
   
   //2.connect server to all clients via select() & accept() 
   struct timeval timeout;
@@ -189,27 +190,41 @@ int main(int argc, char *argv[])
   Server_to_Clients(clientList,timeout,listen_fd,atoi(argv[2]));
 
   //3.connect clients to their neighbors
-  Clients_to_Clients(clientList);
-  /*
+  Clients_to_Clients(clientList,argv[2]);
+
+  
   //4.1.start the game
   srand((unsigned)time(NULL));
   int start = rand() % atoi(argv[2]);
   cout << "Ready to start the game, sending potato to player " << start <<endl;
-  send(clientList[start].fd,argv[3],16,0);
-  //4.2.wait
-  fd_set reads;
-  FD_ZERO(&reads);//00000000000000000
-  int fd_max = 0;
+
+  /*
   for(size_t i = 0; i < clientList.size(); i++){
-    if(fd_max < clientList[i].fd){
+    char buffer[16];
+    recv(clientList[i].fd,buffer,16,0);
+    cout << buffer <<endl;
+  }
+  */
+  send(clientList[start].fd,argv[3],16,0);
+ 
+  //4.2. wait
+  fd_set reads;//fd_set including server and all clients
+  int fd_max = -1;//the largest fd number
+  FD_ZERO(&reads);//00000000000000000
+  for(size_t i = 0; i < clientList.size(); i++){
+    FD_SET(clientList[i].fd, &reads);
+    if (fd_max < clientList[i].fd ){
       fd_max = clientList[i].fd;
     }
-    FD_SET(clientList[i].fd, &reads);
   }
-  int sigEND = 0;
-  while (sigEND == 0){
+
+  
+  int count = 0;
+  while(count < 1){
+    
     fd_set temp = reads;
-    int status = select(fd_max + 1, &temp, 0, 0, &timeout);//polling all the fds
+    //Notice that acceptor uses read set but receiving data from a connected socket uses write set
+    int status = select(fd_max + 1, &temp,0, 0, &timeout);//polling all the fds
     if(status == -1){//function fails
       perror("select() fails");
     }
@@ -217,26 +232,30 @@ int main(int argc, char *argv[])
       //cout<< "timeout"<<endl;
       continue;
     }
-
-    for(int fd = 0; fd < fd_max + 1; fd++){
-      if(FD_ISSET(fd, &temp)){//check which file descriptor changes
-
+    /////////////////////////////////////////////////////////////
+    for(size_t i = 0; i < clientList.size(); i++){
+      if(FD_ISSET(clientList[i].fd, &temp)){//check which file descriptor changes
+	char trace[512];
+	recv(clientList[i].fd, trace, 512,0);
+	cout << "Trace of Potato:"<<endl;
+	cout << trace << endl;
 	
-	  char trace[1024]={0};
-	  recv(fd,trace,1024,0);
-	  cout<<"Trace of potato"<<endl;
-	  cout<<trace<<endl;
-	  
-	  for(size_t i = 0; i < clientList.size(); i++){
-	    send(clientList[i].fd,"stop",16,0);
-	    send(clientList[i].fd,trace,1024,0);
-	  }
+	for(size_t i = 0; i < clientList.size(); i++){
+	  send(clientList[i].fd, "stop", 16,0);
+	  send(clientList[i].fd, trace,512,0);
+	}
+	//don't use break with select()
 	
+	count ++;
+	FD_CLR(clientList[i].fd,&reads);//for writing data, use fd_clr
       }
+      
     }
+    ////////////////////////////////////////////////////////////////
+    //cout<<"count is " <<count<<endl;
+    
   }
-
-  */
+  
   //close all fds
   for(size_t i = 0; i < clientList.size(); i++){
     close(clientList[i].fd);
