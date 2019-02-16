@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <cmath>
 #include <vector>
 
 #define PORT 4444
@@ -171,6 +172,11 @@ void Clients_to_Clients(const vector<addrPack> &List){
 
 int main(int argc, char *argv[])
 {
+  //0. check argc
+  if(argc != 4){
+    perror("Usage: ./ringmaster <port> <num_player> <num_hop>");
+    exit(EXIT_FAILURE);
+  }
   //1.setupthe listening socket
   int listen_fd = createListenSocket();
   
@@ -180,12 +186,57 @@ int main(int argc, char *argv[])
   timeout.tv_usec = 5000;
   vector<addrPack> clientList;//record order of connection, to close them at the end
 
-  Server_to_Clients(clientList,timeout,listen_fd,NUM_PLAYER);
+  Server_to_Clients(clientList,timeout,listen_fd,atoi(argv[2]));
 
   //3.connect clients to their neighbors
   Clients_to_Clients(clientList);
-  
-  
+  /*
+  //4.1.start the game
+  srand((unsigned)time(NULL));
+  int start = rand() % atoi(argv[2]);
+  cout << "Ready to start the game, sending potato to player " << start <<endl;
+  send(clientList[start].fd,argv[3],16,0);
+  //4.2.wait
+  fd_set reads;
+  FD_ZERO(&reads);//00000000000000000
+  int fd_max = 0;
+  for(size_t i = 0; i < clientList.size(); i++){
+    if(fd_max < clientList[i].fd){
+      fd_max = clientList[i].fd;
+    }
+    FD_SET(clientList[i].fd, &reads);
+  }
+  int sigEND = 0;
+  while (sigEND == 0){
+    fd_set temp = reads;
+    int status = select(fd_max + 1, &temp, 0, 0, &timeout);//polling all the fds
+    if(status == -1){//function fails
+      perror("select() fails");
+    }
+    else if(status == 0){//timeout
+      //cout<< "timeout"<<endl;
+      continue;
+    }
+
+    for(int fd = 0; fd < fd_max + 1; fd++){
+      if(FD_ISSET(fd, &temp)){//check which file descriptor changes
+
+	
+	  char trace[1024]={0};
+	  recv(fd,trace,1024,0);
+	  cout<<"Trace of potato"<<endl;
+	  cout<<trace<<endl;
+	  
+	  for(size_t i = 0; i < clientList.size(); i++){
+	    send(clientList[i].fd,"stop",16,0);
+	    send(clientList[i].fd,trace,1024,0);
+	  }
+	
+      }
+    }
+  }
+
+  */
   //close all fds
   for(size_t i = 0; i < clientList.size(); i++){
     close(clientList[i].fd);

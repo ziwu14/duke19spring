@@ -79,12 +79,12 @@ void connectSocket(int fd,const char *target_ip,const char *target_port){
 }
 
 
-void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,const char *leftIP,const char *left_rightPort,const char *rightIP,const char *right_leftPort){
+void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,const char *leftIP,const char *left_rightPort,const char *rightIP,const char *right_leftPort,int&fd_max){
 
   fd_set reads;
   FD_ZERO(&reads);//00000000000000000
   FD_SET(listen_fd, &reads);//00000001000000000
-  int fd_max = listen_fd;//
+  fd_max = listen_fd;//
   
   int neighbor_fd;
   struct sockaddr_in neighbor_address;
@@ -129,8 +129,8 @@ void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,c
 	  int b = strcmp(nPort,left_rightPort);
 	  int c = strcmp(nIP,rightIP);
 	  int d = strcmp(nPort,right_leftPort);
-	  if( ( (a == 0) && (b == 0) ) || ( (c == 0) && (d == 0) )){
-	    cout<<"accept fd:"<<neighbor_fd<<endl;
+	  if( ( (a == 0) && (b == 0) ) || ( (c == 0) && (d == 0) )){//only allows two neighbors to connect to the client
+	    //cout<<"accept fd:"<<neighbor_fd<<endl;
 	    FD_SET(neighbor_fd, &reads);
 	    fd_List.push_back(neighbor_fd);
 	 
@@ -152,6 +152,103 @@ void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,c
     }
     
   }
+}
+
+void start_game(vector<int> &fd_List,struct timeval timeout,int server_fd,int left_fd, int right_fd, int fd_max, char *id){
+
+  fd_set reads;
+  FD_ZERO(&reads);
+  //monitor server end, and two acceptor side
+  FD_SET(server_fd, &reads);
+  FD_SET(fd_List[0], &reads);
+  FD_SET(fd_List[1], &reads);
+
+  int sigEND = 0;
+  while(sigEND != 1){
+    
+    fd_set temp = reads;
+    int status = select(fd_max + 1, &temp, 0, 0, &timeout);
+    if(status == -1){//function fails
+      perror("select() fails");
+    }
+    else if(status == 0){//timeout
+      //cout<< "timeout"<<endl;
+      continue;
+    }
+
+    for(int fd = 0; fd < fd_max + 1; fd++){
+      if(FD_ISSET(fd, &temp)){
+	
+	if(fd == server_fd){//from server side
+	  
+	  char buffer[16]={0};
+	  recv(fd, buffer, 16, 0);
+	  
+	  if(strcmp(buffer,"stop") == 0){//stop the game
+	    
+	    sigEND = 1;
+	    break;
+	    
+	  }else{//i.e. you are the start
+	    
+	    int hops = atoi(buffer);
+	    
+	    if(hops == 0){//unlucky
+	      send(server_fd, id, 1024, 0);
+	    }else{//randomly choose one side to pass the potato
+
+	      hops--;
+	      char hops_str[16]={0};
+	      sprintf(hops_str,"%d",hops);
+	      
+	      srand((unsigned)time(NULL));
+	      int random = rand() % 100;
+	      
+	      if(random < 50){
+		send(left_fd,id,1024,0);
+		send(left_fd,hops_str,16,0);
+	      }else{
+		send(right_fd,id,1024,0);
+		send(right_fd,hops_str,16,0);
+	      }
+	    }
+	  }
+	}
+	if( (fd == fd_List[0]) || (fd == fd_List[1])){
+
+	  char trace[1024]={0};
+	  char hops_str[16]={0};
+	  recv(fd,trace,1024,0);
+	  recv(fd,hops_str,16,0);
+
+	  int hops = atoi(hops_str);
+	  hops--;
+	  char hops_str_new[16]={0};
+	  
+	  strcat(trace," ");
+	  strcat(trace,id);
+	  sprintf(hops_str_new,"%d",hops);
+
+	  if(hops == 0){
+	    send(server_fd,trace,1024,0);
+	  }else{
+	    srand((unsigned)time(NULL));
+	    int random = rand() % 100;
+	      
+	    if(random < 50){
+	      send(left_fd,id,1024,0);
+	      send(left_fd,hops_str,16,0);
+	    }else{
+	      send(right_fd,id,1024,0);
+	      send(right_fd,hops_str,16,0);
+	    }
+	  }
+	}
+      }      
+    }
+  }
+
+  
 }
 
 
@@ -210,7 +307,8 @@ int main(int argc, char *argv[])
   recv(server_fd,left_listenPort,16,0);//connector will try to connecto via listenPort
   char left_rightPort[16]="\0";
   recv(server_fd,left_rightPort,16,0);//after accept(), will check if this is the correct port
-  cout<<"left neighbor-- ip: "<< left_ip<<" listenPort: "<<left_listenPort<<" rightPort: "<<left_rightPort <<endl;
+  cout<<"You ID: "<<id<<endl;
+  cout<<"left neighbor-- ip: "<< left_ip<<" listenPort: "<<left_listenPort<<" rightPort: "<<left_rightPort <<endl<<endl;;
   
   char right_ip[16]="\0";
   recv(server_fd,right_ip,16,0);
@@ -229,30 +327,36 @@ int main(int argc, char *argv[])
   timeout.tv_sec = 5;
   timeout.tv_usec = 5000;
   vector<int> accept_fds;//passive accepted sockets
+  int fd_max;
   if(atoi(id) %2 == 0){
-    cout<<"acceptor first"<<endl;
-    acceptNeighbors(accept_fds,timeout,listen_fd,left_ip,left_rightPort,right_ip,right_leftPort);
+    //cout<<"acceptor first"<<endl;
+    acceptNeighbors(accept_fds,timeout,listen_fd,left_ip,left_rightPort,right_ip,right_leftPort,fd_max);
 
     connectSocket(left_fd, left_ip,left_listenPort);
     connectSocket(right_fd,right_ip,right_listenPort);
   }else{
-    cout<<"connector first"<<endl;
-    sleep(1);//since acceptor is a while loop
+    //cout<<"connector first"<<endl;
+    sleep(5);//since acceptor is a while loop
     
     connectSocket(left_fd, left_ip,left_listenPort);
     connectSocket(right_fd,right_ip,right_listenPort);
-
-    acceptNeighbors(accept_fds,timeout,listen_fd,left_ip,left_rightPort,right_ip,right_leftPort);
+    acceptNeighbors(accept_fds,timeout,listen_fd,left_ip,left_rightPort,right_ip,right_leftPort,fd_max);
   }
+  cout<<"client-to-client connection succeeds"<<endl;
   /*
   for(size_t i = 0; i < accept_fds.size(); i++){
     cout<< accept_fds[i]<<endl;
   }
   */
-  //3. select() to check if server_fd and accept_fds
-  
-  
-  //4. close all fds
+  /*
+  //5. start the game
+  start_game(accept_fds,timeout,server_fd,left_fd,right_fd, fd_max, id);
+  char trace[1024];
+  recv(server_fd,trace,1024,0);
+  cout << "Trace of Potato:"<<endl;
+  cout << trace << endl;
+  */
+  //6. close all fds
   for(size_t i = 0; i < accept_fds.size(); i++){
     close(accept_fds[i]);
   }
