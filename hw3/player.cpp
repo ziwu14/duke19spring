@@ -95,7 +95,7 @@ void acceptNeighbors(vector<int> &fd_List,struct timeval timeout,int listen_fd,c
   cout<<endl;
   */
   int neighbor_count = 0;
-  while(((neighbor_count !=2)&&((id !=0)&&(id!=(num_player-1)))  ) || ( neighbor_count != 1 && ((id == 0)||(id == num_player - 1))  ) ){//only 2 neighbors
+  while(((neighbor_count != 2)&&((id !=0)&&(id!=(num_player-1))) ) || ( (neighbor_count != 1) && ((id == 0)||(id == num_player - 1))  ) ){//only 2 neighbors
     
     fd_set temp = reads;//select will reset the fd_set so we need a temporary temp
     int status = select(fd_max + 1, &temp, 0, 0, &timeout);//polling all the fds
@@ -416,35 +416,16 @@ int main(int argc, char *argv[])
   }
   cout<<"client-to-client connection succeeds"<<endl<<endl;
   cout <<"left_fd: "<<left_fd<<" right_fd: "<<right_fd<<endl;
-  /*
-  for(size_t i = 0; i < accept_fds.size(); i++){
-    cout<< accept_fds[i]<<endl;
-  }
-  */
-  /*
-  if(strcmp(id,"0") == 0){
-    send(accept_fds[0],"0-0",16,0);
-    send(accept_fds[1],"0-1",16,0);
-    //send(server_fd,id,16,0);
-  }
-  if(strcmp(id,"1") == 0){
-    send(accept_fds[0],"1-0",16,0);
-    send(accept_fds[1],"1-1",16,0);
-    //send(server_fd,id,16,0);
-  }
-  if(strcmp(id,"2") == 0){
-    send(accept_fds[0],"2-0",16,0);
-    send(accept_fds[1],"2-1",16,0);
-    //send(server_fd,id,16,0);
-  }
-  //send(accept_fds[0],id,16,0);
-  //send(accept_fds[1],id,16,0);
+  
+  
+  send(accept_fds[0],id,16,0);
+  send(accept_fds[1],id,16,0);
   char l1[16]={0};
   char l2[16]={0};
   recv(left_fd,l1,16,0);
   recv(right_fd,l2,16,0);
   cout<<"l1: "<<l1<<" l2: "<<l2<<endl<<endl;
-  */
+  
 
   /*
   //5. start the game
