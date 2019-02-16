@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
 {
   //0. check argc
   if(argc != 4){
-    perror("Usage: ./ringmaster <port> <num_player> <num_hop>");
+    cerr<<"Usage: ./ringmaster <port> <num_player> <num_hop>"<<endl;
     exit(EXIT_FAILURE);
   }
   //1.setupthe listening socket
@@ -192,19 +192,19 @@ int main(int argc, char *argv[])
   //3.connect clients to their neighbors
   Clients_to_Clients(clientList,argv[2]);
 
-  
+  /*
   //4.1.start the game
   srand((unsigned)time(NULL));
   int start = rand() % atoi(argv[2]);
   cout << "Ready to start the game, sending potato to player " << start <<endl;
 
-  /*
+  
   for(size_t i = 0; i < clientList.size(); i++){
     char buffer[16];
     recv(clientList[i].fd,buffer,16,0);
     cout << buffer <<endl;
   }
-  */
+  
   send(clientList[start].fd,argv[3],16,0);
  
   //4.2. wait
@@ -255,7 +255,7 @@ int main(int argc, char *argv[])
     //cout<<"count is " <<count<<endl;
     
   }
-  
+  */
   //close all fds
   for(size_t i = 0; i < clientList.size(); i++){
     close(clientList[i].fd);

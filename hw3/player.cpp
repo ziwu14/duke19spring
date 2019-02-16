@@ -446,7 +446,7 @@ int main(int argc, char *argv[])
   cout<<"l1: "<<l1<<" l2: "<<l2<<endl<<endl;
   */
 
-  
+  /*
   //5. start the game
   
   start_game(accept_fds,timeout,server_fd,left_fd,right_fd, id);
@@ -457,7 +457,8 @@ int main(int argc, char *argv[])
   cout << trace << endl;
  
   //send(server_fd,id,512,0);
-  //6. close all fds
+  */
+//6. close all fds
   for(size_t i = 0; i < accept_fds.size(); i++){
     close(accept_fds[i]);
   }
